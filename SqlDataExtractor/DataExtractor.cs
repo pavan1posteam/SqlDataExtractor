@@ -1,14 +1,16 @@
-﻿using System;
+﻿using Npgsql;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net;
+using System.Runtime;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.IO.Compression;
-using Npgsql;
 
 
 namespace SqlDataExtractor
@@ -107,7 +109,7 @@ namespace SqlDataExtractor
                                 Console.WriteLine($"Error exporting table {schemaName}.{tableName}: {tableEx.Message}");
                             }
                         }
-                        Console.WriteLine($"All {exportedTables} tables Exported Successfully.");
+                        Console.WriteLine($"All {exportedTables} tables Proccessed Successfully.");
                     }
                     string zipPath = @"C:\Bottlecapps\New folder\Data.zip";
                     if (File.Exists(zipPath))
@@ -116,6 +118,18 @@ namespace SqlDataExtractor
                     }
                     ZipFile.CreateFromDirectory(outputFolder, zipPath);
                     Directory.Delete(outputFolder, true);
+                    Console.WriteLine("Do you want to send the zip file in local FTP (Y/N)?");
+                    var ftpSelection = Console.ReadLine();
+                    if (ftpSelection.Equals("Y", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine("Uploading......");
+                        Upload(zipPath);
+                        File.Delete(zipPath);
+                    }
+                    else if (ftpSelection.Equals("N", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine("Process Completed. Zip file is located at: " + zipPath);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -198,6 +212,19 @@ namespace SqlDataExtractor
                             File.Delete(zipPath);
                         }
                         ZipFile.CreateFromDirectory(outputFolder, zipPath);
+                        Directory.Delete(outputFolder, true);
+                        Console.WriteLine("Do you want to send the zip file in local FTP (Y/N)?");
+                        var ftpSelection = Console.ReadLine();
+                        if (ftpSelection.Equals("Y", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Console.WriteLine("Uploading......");
+                            Upload(zipPath);
+                            File.Delete(zipPath);
+                        }
+                        else if (ftpSelection.Equals("N", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Console.WriteLine("Process Completed. Zip file is located at: " + zipPath);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -210,7 +237,7 @@ namespace SqlDataExtractor
             else
             {
                 count++;
-                Console.WriteLine("Invalid selection. Please select either 1 or 2.");
+                Console.WriteLine("Invalid Selection. Please Select Either 1 or 2.");
                 if(count < 3)
                 {
                     Thread.Sleep(2000);
@@ -222,6 +249,43 @@ namespace SqlDataExtractor
                     Thread.Sleep(2000);
                     return;
                 }
+            }
+        }
+        private static void Upload(string filename)
+        {
+            try
+            {
+                string ftpServerIP = "54.174.152.95";
+                string ftpUserID = "AAAStore_10000";
+                string ftpPassword = "A5t0r3@10000";
+                FileInfo fileInf = new FileInfo(filename);
+                string remotePath = "/Upload/" + fileInf.Name;
+
+                FtpWebRequest reqFTP = (FtpWebRequest)WebRequest.Create("ftp://" + ftpServerIP + remotePath);
+                reqFTP.Credentials = new NetworkCredential(ftpUserID, ftpPassword);
+                reqFTP.KeepAlive = false;
+                reqFTP.Method = WebRequestMethods.Ftp.UploadFile;
+                reqFTP.UseBinary = true;
+                reqFTP.ContentLength = fileInf.Length;
+
+                const int buffLength = 2048;
+                byte[] buffer = new byte[buffLength];
+
+                using (FileStream fs = fileInf.OpenRead())
+                using (Stream strm = reqFTP.GetRequestStream())
+                {
+                    int bytesRead;
+                    while ((bytesRead = fs.Read(buffer, 0, buffLength)) > 0)
+                    {
+                        strm.Write(buffer, 0, bytesRead);
+                    }
+                }
+
+                Console.WriteLine("Uploaded: " + fileInf.Name);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error uploading file: {ex.Message}");
             }
         }
     }
